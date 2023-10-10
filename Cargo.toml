@@ -1,4 +1,5 @@
 [workspace]
 members = [
     "maximum_flow",
+    "generalized_maximum_flow",
 ]
