@@ -248,6 +248,48 @@ impl ScalingGraph {
         Some(distance_to_sink)
     }
 
+    pub fn calculate_distance_to_sink(&mut self, sink: usize) -> Vec<Dist> {
+        let mut distance = vec![DIST_MAX; self.num_nodes];
+        let mut distance_to_sink = vec![DIST_MAX; self.num_nodes];
+        let mut visited = vec![false; self.num_nodes];
+        distance[sink] = 0;
+        distance_to_sink[sink] = 0;
+
+        let mut heap = BinaryHeap::new();
+        heap.push((Reverse(0), sink));
+
+        let mut farthest = 0;
+        while let Some((d, u)) = heap.pop() {
+            if visited[u] {
+                continue;
+            }
+            visited[u] = true;
+            farthest = d.0;
+
+            for i in self.start[u]..self.start[u + 1] {
+                let e = &self.inside_edge_list[i];
+                // for e in self.graph[u].iter() {
+                // edge(e.to -> u) is not usable
+                if e.flow > 0.0 && !visited[e.to] {
+                    // using dist of edge(e.to -> u)
+                    let dist = -e.dist - self.potentials[e.to] + self.potentials[u];
+                    assert!(dist >= 0);
+
+                    let new_dist = d.0 as Dist + dist;
+                    if new_dist < distance[e.to] {
+                        distance[e.to] = new_dist;
+                        distance_to_sink[e.to] = distance_to_sink[u] - e.dist;
+                        heap.push((Reverse(new_dist), e.to));
+                    }
+                }
+            }
+        }
+
+        // update potentials
+        self.potentials = self.potentials.iter().enumerate().map(|(u, p)| p + distance[u].min(farthest)).collect();
+        distance_to_sink
+    }
+
     // find shortest path from source to sink & update potentials
     pub fn find_shortest_path(&mut self, source: usize, sink: usize) -> Option<Vec<(usize, usize)>> {
         let mut prev = vec![(self.num_nodes, self.num_nodes); self.num_nodes];
