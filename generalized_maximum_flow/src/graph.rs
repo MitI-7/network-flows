@@ -1,5 +1,5 @@
 use std::cmp::Reverse;
-use std::collections::BinaryHeap;
+use std::collections::{BinaryHeap, VecDeque};
 
 pub type Flow = f64;
 pub type Dist = i32;
@@ -200,6 +200,54 @@ impl<'a> ScalingGraph {
 }
 
 impl ScalingGraph {
+    pub fn calculate_distance_to_sink_with_negative_edge(&mut self, sink: usize) -> Option<Vec<Dist>> {
+        let mut distance = vec![DIST_MAX; self.num_nodes];
+        let mut distance_to_sink = vec![DIST_MAX; self.num_nodes];
+        let mut in_queue = vec![false; self.num_nodes];
+        let mut visit_count = vec![0 as usize; self.num_nodes];
+
+        distance[sink] = 0;
+        distance_to_sink[sink] = 0;
+
+        let mut que = VecDeque::new();
+        que.push_back(sink);
+        in_queue[sink] = true;
+
+        let mut farthest = 0;
+        while let Some(u) = que.pop_front() {
+            in_queue[u] = false;
+            farthest = farthest.max(distance[u]);
+            assert_ne!(distance[u], DIST_MAX);
+
+            for i in self.start[u]..self.start[u + 1] {
+                let e = &self.inside_edge_list[i];
+                if e.flow > 0.0 {
+                    let dist = -e.dist - self.potentials[e.to] + self.potentials[u];
+                    let new_dist = distance[u] + dist;
+
+                    if new_dist < distance[e.to] {
+                        distance[e.to] = new_dist;
+                        distance_to_sink[e.to] = distance_to_sink[u] - e.dist;
+
+                        visit_count[e.to] += 1;
+                        if visit_count[e.to] >= self.num_nodes {
+                            // negative cycle detected
+                            return None;
+                        }
+
+                        if !in_queue[e.to] {
+                            in_queue[e.to] = true;
+                            que.push_back(e.to);
+                        }
+                    }
+                }
+            }
+        }
+
+        self.potentials = self.potentials.iter().enumerate().map(|(u, p)| p + distance[u].min(farthest)).collect();
+        Some(distance_to_sink)
+    }
+
     // find shortest path from source to sink & update potentials
     pub fn find_shortest_path(&mut self, source: usize, sink: usize) -> Option<Vec<(usize, usize)>> {
         let mut prev = vec![(self.num_nodes, self.num_nodes); self.num_nodes];
